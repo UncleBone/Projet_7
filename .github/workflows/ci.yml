@@ -56,13 +56,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Security Audit (npm audit)
-        run: |
-          cd server && npm audit --audit-level=high
-          cd client && npm audit --audit-level=high
+      - name: Backend Security Audit
+        run: npm audit --audit-level=high
+        working-directory: server
+
+      - name: Frontend Security Audit
+        run: npm audit --audit-level=high
+        working-directory: client
 
       # --- BUILD CHECK (Vérification que la compilation fonctionne) ---
       - name: Build Projects
         run: |
           cd server && npm run build
-          cd client && npm run build
+          cd ../client && npm run build
