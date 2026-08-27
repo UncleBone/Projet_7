@@ -1,0 +1,68 @@
+name: CI Orion CRM
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  continuous-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Important pour SonarCloud
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          # On précise les deux dossiers pour le cache
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      # --- BACKEND ---
+      - name: Install Backend Dependencies
+        run: cd server && npm ci
+
+      - name: Prisma Generate
+        run: cd server && npx prisma generate
+
+      - name: Backend Lint & Test
+        run: |
+          cd server
+          npm run lint
+          npm run test -- --coverage # Génère le rapport pour Sonar
+
+      # --- FRONTEND ---
+      - name: Install Frontend Dependencies
+        run: cd client && npm ci
+
+      - name: Frontend Lint & Test
+        run: |
+          cd client
+          npm run lint
+          npm run test -- --coverage # Génère le rapport pour Sonar
+
+      # --- ANALYSE QUALITÉ & SÉCURITÉ ---
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Security Audit (npm audit)
+        run: |
+          cd server && npm audit --audit-level=high
+          cd client && npm audit --audit-level=high
+
+      # --- BUILD CHECK (Vérification que la compilation fonctionne) ---
+      - name: Build Projects
+        run: |
+          cd server && npm run build
+          cd client && npm run build
