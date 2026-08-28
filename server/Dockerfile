@@ -26,9 +26,11 @@ RUN apk add --no-cache openssl libc6-compat curl
 
 # Copie uniquement des fichiers nécessaires
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/prisma ./prisma
+
+# INSTALLATION PROPRE : On installe UNIQUEMENT les dépendances de prod
+RUN npm ci --omit=dev
 
 # Sécurité : Utilisation d'un utilisateur non-root
 USER node
