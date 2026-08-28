@@ -8,6 +8,7 @@ dotenv.config();
 
 const app: Application = express();
 const PORT = process.env.PORT || 8080;
+const HOST = '0.0.0.0'; // Important pour Docker
 
 // Middleware
 app.use(cors());
@@ -32,9 +33,9 @@ app.use((err: Error, _req: Request, res: Response) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
+app.listen(Number(PORT), HOST, () => {
+  console.log(`Server is running on http://${HOST}:${PORT}`);
+  console.log(`Health check: http://${HOST}:${PORT}/api/health`);
 });
 
 export default app;
