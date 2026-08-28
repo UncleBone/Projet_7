@@ -69,3 +69,35 @@ jobs:
         run: |
           cd server && npm run build
           cd ../client && npm run build
+
+      # --- DOCKER BUILD & SCAN (SÉCURITÉ DES IMAGES) ---
+      
+      # 1. Préparation de l'image Backend
+      - name: Build Backend Docker Image
+        run: docker build -t orion-api:${{ github.sha }} ./server
+
+      # 2. Scan de l'image Backend avec Trivy
+      - name: Scan Backend Image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'orion-api:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # Bloque le pipeline en cas de vulnérabilité
+          ignore-unfixed: true # Ignore les failles qui n'ont pas encore de correctif
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # 3. Préparation de l'image Frontend
+      - name: Build Frontend Docker Image
+        run: docker build -t orion-client:${{ github.sha }} ./client
+
+      # 4. Scan de l'image Frontend avec Trivy
+      - name: Scan Frontend Image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'orion-client:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
