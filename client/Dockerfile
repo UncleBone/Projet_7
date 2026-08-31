@@ -1,5 +1,7 @@
 # Étape 1 : Build
 FROM node:22-alpine AS build
+# Mise à jour de npm pour corriger ses propres failles de sécurité
+RUN npm install -g npm@latest
 
 WORKDIR /app
 

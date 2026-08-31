@@ -1,5 +1,7 @@
 # Étape 1 : Build
 FROM node:22-alpine AS build
+# Mise à jour de npm pour corriger ses propres failles de sécurité
+RUN npm install -g npm@latest
 # Installation des dépendances système nécessaires pour Prisma
 RUN apk add --no-cache openssl libc6-compat
 
@@ -17,7 +19,8 @@ RUN npm run build
 
 # Étape 2 : Runtime
 FROM node:22-alpine
-
+# Mise à jour de npm pour corriger ses propres failles de sécurité
+RUN npm install -g npm@latest
 
 WORKDIR /app
 
