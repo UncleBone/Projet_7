@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import organizationRoutes from './routes/organizationRoutes';
 import contactRoutes from './routes/contactRoutes';
+import logger from './utils/logger';
 
 dotenv.config();
 
@@ -36,6 +37,10 @@ app.use((err: Error, _req: Request, res: Response) => {
 app.listen(Number(PORT), HOST, () => {
   console.log(`Server is running on http://${HOST}:${PORT}`);
   console.log(`Health check: http://${HOST}:${PORT}/api/health`);
+});
+
+app.listen(8080, () => {
+  logger.info('Server started on port 8080', { action: 'bootstrap' });
 });
 
 export default app;
