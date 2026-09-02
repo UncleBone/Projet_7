@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import organizationRoutes from './routes/organizationRoutes';
 import contactRoutes from './routes/contactRoutes';
+import logRoutes from './routes/logRoutes';
 import logger from './utils/logger';
 
 dotenv.config();
@@ -22,6 +23,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/logs', logRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
@@ -41,6 +43,12 @@ app.listen(Number(PORT), HOST, () => {
 
 app.listen(8080, () => {
   logger.info('Server started on port 8080', { action: 'bootstrap' });
+});
+
+// On simule une erreur de connexion à un service tiers
+logger.error('ALERTE : Connexion perdue avec le service de statistiques', {
+  service: 'stats-engine',
+  attempt: 3
 });
 
 export default app;
