@@ -1,4 +1,4 @@
-name: CI Orion CRM
+name: CI/CD Orion CRM
 
 on:
   push:
@@ -85,7 +85,7 @@ jobs:
           exit-code: '1' # Bloque le pipeline en cas de vulnérabilité
           ignore-unfixed: true # Ignore les failles qui n'ont pas encore de correctif
           vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          severity: 'CRITICAL,HIGH'
 
       # 3. Préparation de l'image Frontend
       - name: Build Frontend Docker Image
@@ -100,7 +100,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          severity: 'CRITICAL,HIGH'
 
   publish-images:
     needs: continuous-integration # Ne se lance que si la CI est OK
