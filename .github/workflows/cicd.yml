@@ -1,138 +1,120 @@
-name: CI/CD Orion CRM
+name: CI/CD Orion CRM Optimized
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *' # Tous les jours à 2h du matin
 
 jobs:
-  continuous-integration:
+  # --- JOB 1 : VALIDATION BACKEND ---
+  backend-ci:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Important pour SonarCloud
-
-      - name: Setup Node.js 22
+      - uses: actions/checkout@v4
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-          # On précise les deux dossiers pour le cache
-          cache-dependency-path: |
-            server/package-lock.json
-            client/package-lock.json
-
-      # --- BACKEND ---
-      - name: Install Backend Dependencies
-        run: cd server && npm ci
-
-      - name: Prisma Generate
-        run: cd server && npx prisma generate
-
-      - name: Backend Lint & Test
+          cache-dependency-path: server/package-lock.json
+      
+      - name: Install & Test Backend
         run: |
           cd server
+          npm ci
+          npx prisma generate
           npm run lint
-          npm run test -- --coverage # Génère le rapport pour Sonar
+          npm run test -- --coverage
 
-      # --- FRONTEND ---
-      - name: Install Frontend Dependencies
-        run: cd client && npm ci
-
-      - name: Frontend Lint & Test
+  # --- JOB 2 : VALIDATION FRONTEND (Tourne en parallèle du Backend) ---
+  frontend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      
+      - name: Install & Test Frontend
         run: |
           cd client
+          npm ci
           npm run lint
-          npm run test -- --coverage # Génère le rapport pour Sonar
+          npm run test -- --coverage
 
-      # --- ANALYSE QUALITÉ & SÉCURITÉ ---
+  # --- JOB 3 : ANALYSE PROFONDE (Qualité & Sécurité) ---
+  # Ce job ne se lance que sur 'main' (push ou schedule) pour ne pas ralentir les PR
+  security-and-quality:
+    needs: [backend-ci, frontend-ci]
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Backend Security Audit
-        run: npm audit --audit-level=high
-        working-directory: server
-
-      - name: Frontend Security Audit
-        run: npm audit --audit-level=high
-        working-directory: client
-
-      # --- BUILD CHECK (Vérification que la compilation fonctionne) ---
-      - name: Build Projects
+      - name: Security Audit (NPM)
         run: |
-          cd server && npm run build
-          cd ../client && npm run build
+          cd server && npm audit --audit-level=high
+          cd ../client && npm audit --audit-level=high
 
-      # --- DOCKER BUILD & SCAN (SÉCURITÉ DES IMAGES) ---
+      # On build les images juste pour le scan Trivy
+      - name: Build & Scan Docker Images (Trivy)
+        run: |
+          docker build -t orion-api:scan ./server
+          docker build -t orion-client:scan ./client
       
-      # 1. Préparation de l'image Backend
-      - name: Build Backend Docker Image
-        run: docker build -t orion-api:${{ github.sha }} ./server
-
-      # 2. Scan de l'image Backend avec Trivy
-      - name: Scan Backend Image (Trivy)
+      - name: Scan Backend Image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'orion-api:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1' # Bloque le pipeline en cas de vulnérabilité
-          ignore-unfixed: true # Ignore les failles qui n'ont pas encore de correctif
-          vuln-type: 'os,library'
-          severity: 'CRITICAL'
-
-      # 3. Préparation de l'image Frontend
-      - name: Build Frontend Docker Image
-        run: docker build -t orion-client:${{ github.sha }} ./client
-
-      # 4. Scan de l'image Frontend avec Trivy
-      - name: Scan Frontend Image (Trivy)
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'orion-client:${{ github.sha }}'
-          format: 'table'
+          image-ref: 'orion-api:scan'
           exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
           severity: 'CRITICAL'
 
-  publish-images:
-    needs: continuous-integration # Ne se lance que si la CI est OK
-    if: github.ref == 'refs/heads/main' # Uniquement sur la branche main
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Scan Frontend Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'orion-client:scan'
+          exit-code: '1'
+          severity: 'CRITICAL'
 
+  # --- JOB 4 : PUBLICATION ---
+  # Uniquement sur push main, après succès de la sécurité
+  publish-images:
+    needs: security-and-quality
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Publication du Backend
-      - name: Build and Push Backend Image
+      - name: Build and Push Backend
         uses: docker/build-push-action@v5
         with:
           context: ./server
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/orion-api:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/orion-api:${{ github.sha }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/orion-api:latest
 
-      # Publication du Frontend
-      - name: Build and Push Frontend Image
+      - name: Build and Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./client
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/orion-client:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/orion-client:${{ github.sha }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/orion-client:latest
