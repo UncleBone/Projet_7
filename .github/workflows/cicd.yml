@@ -21,13 +21,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
       
-      - name: Install & Test Backend
+      - name: Install, Test & Build Backend
         run: |
           cd server
           npm ci
           npx prisma generate
           npm run lint
           npm run test -- --coverage
+          npm run build
 
   # --- JOB 2 : VALIDATION FRONTEND (Tourne en parallèle du Backend) ---
   frontend-ci:
@@ -41,12 +42,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
       
-      - name: Install & Test Frontend
+      - name: Install, Test & Build Frontend
         run: |
           cd client
           npm ci
           npm run lint
           npm run test -- --coverage
+          npm run build
 
   # --- JOB 3 : ANALYSE PROFONDE (Qualité & Sécurité) ---
   # Ce job ne se lance que sur 'main' (push ou schedule) pour ne pas ralentir les PR
