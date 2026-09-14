@@ -12,7 +12,6 @@ COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci
 
-# Génération du client Prisma et build TypeScript
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -34,6 +33,12 @@ COPY --from=build /app/prisma ./prisma
 
 # INSTALLATION PROPRE : On installe UNIQUEMENT les dépendances de prod
 RUN npm ci --omit=dev
+
+# Régénération du client Prisma pour l'environnement de prod
+RUN npx prisma generate
+
+# CHOWN : On donne la propriété du dossier /app à l'utilisateur non-root "node"
+RUN chown -R node:node /app
 
 # Sécurité : Utilisation d'un utilisateur non-root
 USER node
